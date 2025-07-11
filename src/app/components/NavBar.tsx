@@ -6,6 +6,7 @@ import { signIn, useSession, signOut } from 'next-auth/react';
 import Image from 'next/image';
 import axiosClient from '@/utils/axiosClient';
 import { usePathname } from 'next/navigation';
+import axios from 'axios';
 
 export default function NavBar() {
     const pathname = usePathname();
@@ -19,23 +20,45 @@ export default function NavBar() {
     const [dropdownOpen, setDropdownOpen] = useState(false);
 
     useEffect(() => {
+        console.log("useEffect ejecutado, session:", session);
         if (session?.user) {
-            // El ID de Google está en session.user.googleId
+            console.log("session.user existe:", session.user);
             const googleId = (session.user as any).googleId;
+            console.log("googleId:", googleId);
             if (googleId) {
+                console.log("Enviando petición a /users");
+                console.log("Datos enviados:", {
+                    googleId,
+                    email: session.user.email,
+                    nombre: session.user.name,
+                    foto: session.user.image
+                });
                 axiosClient.post('/users', {
                     googleId,
                     email: session.user.email,
                     nombre: session.user.name,
                     foto: session.user.image
-                }).catch((err) => {
-                    if (err.response?.status !== 409) {
-                        console.error("Error creando usuario:", err.response?.data || err.message);
-                    }
-                });
+                }, { withCredentials: true }) // <- importante para que el navegador acepte la cookie
+                    .then(res => {
+                        console.log("Respuesta del backend:", res);
+                        // Ya no necesitas guardar el token en localStorage ni en cookies manualmente
+                    })
+                    .catch((err) => {
+                        console.error("Error en la petición a /users:", err);
+                    });
             }
         }
     }, [session?.user]);
+
+    const handleLogout = async () => {
+        try {
+            await axiosClient.post('/users/logout', {}, { withCredentials: true });
+            signOut();
+            console.log("Sesión cerrada correctamente");
+        } catch (error) {
+            console.error("Error al cerrar sesión:", error);
+        }
+    };
 
     return (
         <nav className="bg-white border-gray-200 dark:bg-gray-900">
@@ -72,7 +95,7 @@ export default function NavBar() {
                                         </li>
                                         <li>
                                             <button
-                                                onClick={() => signOut()}
+                                                onClick={handleLogout}
                                                 className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-600 hover:text-white"
                                             >
                                                 Cerrar sesión
