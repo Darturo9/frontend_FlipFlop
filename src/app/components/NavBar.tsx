@@ -20,39 +20,66 @@ export default function NavBar() {
     const [dropdownOpen, setDropdownOpen] = useState(false);
 
     useEffect(() => {
-        console.log("useEffect ejecutado, session:", session);
-        if (session?.user) {
-            console.log("session.user existe:", session.user);
-            const googleId = (session.user as any).googleId;
-            console.log("googleId:", googleId);
-            if (googleId) {
-                console.log("Enviando petición a /users");
-                console.log("Datos enviados:", {
-                    googleId,
-                    email: session.user.email,
-                    nombre: session.user.name,
-                    foto: session.user.image
-                });
-                axiosClient.post('/users', {
-                    googleId,
-                    email: session.user.email,
-                    nombre: session.user.name,
-                    foto: session.user.image
-                }, { withCredentials: true }) // <- importante para que el navegador acepte la cookie
-                    .then(res => {
-                        console.log("Respuesta del backend:", res);
-                        // Ya no necesitas guardar el token en localStorage ni en cookies manualmente
-                    })
-                    .catch((err) => {
-                        console.error("Error en la petición a /users:", err);
-                    });
+        // Solo crear el usuario si es nuevo (no existe en la base de datos)
+        const createUserAndLogin = async () => {
+            if (session?.user) {
+                const googleId = (session.user as any).googleId;
+                if (googleId) {
+                    let user;
+                    try {
+                        // Verificar si el usuario ya existe en el backend
+                        const res = await axiosClient.get(`/users/google/${googleId}`);
+                        user = res.data?.user;
+                        if (!user) {
+                            // Si no existe, crear el usuario
+                            const createRes = await axiosClient.post('/users', {
+                                googleId,
+                                email: session.user.email,
+                                nombre: session.user.name,
+                                foto: session.user.image
+                            }, { withCredentials: true });
+                            user = createRes.data?.user;
+                            console.log("Usuario creado en backend");
+                        } else {
+                            console.log("Usuario ya existe en backend");
+                        }
+                    } catch (err) {
+                        // Si el usuario no existe, el GET puede fallar, entonces lo creamos
+                        const createRes = await axiosClient.post('/users', {
+                            googleId,
+                            email: session.user.email,
+                            nombre: session.user.name,
+                            foto: session.user.image
+                        }, { withCredentials: true });
+                        user = createRes.data?.user;
+                        console.log("Usuario creado en backend (catch)");
+                    }
+                    // Llamar al login del backend para obtener el JWT solo si no existe en localStorage
+                    if (user && user.id && user.email) {
+                        const jwtLocal = localStorage.getItem('jwt_backend');
+                        if (!jwtLocal) {
+                            const jwtRes = await axiosClient.post('/auth/login', {
+                                id: user.id,
+                                email: user.email
+                            });
+                            localStorage.setItem('jwt_backend', jwtRes.data.access_token);
+                            console.log('JWT del backend:', jwtRes.data.access_token);
+                        } else {
+                            console.log('JWT ya existe en localStorage:', jwtLocal);
+                        }
+                    } else {
+                        console.warn('El usuario no tiene id o email, no se puede generar el JWT');
+                    }
+                }
             }
-        }
+        };
+        createUserAndLogin();
     }, [session?.user]);
 
     const handleLogout = async () => {
         try {
             await axiosClient.post('/users/logout', {}, { withCredentials: true });
+            localStorage.removeItem('jwt_backend');
             signOut();
             console.log("Sesión cerrada correctamente");
         } catch (error) {

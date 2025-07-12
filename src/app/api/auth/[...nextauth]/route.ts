@@ -20,7 +20,6 @@ const handler = NextAuth({
             if (account && profile) {
                 token.googleId = profile.sub; // Guardar el googleId en el token
             }
-            console.log("JWT callback:", token);
             return token;
         },
         async session({ session, token }) {
