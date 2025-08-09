@@ -3,9 +3,11 @@
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import PhonesBox from "./PhonesBox";
+import AddressesBox from "./AddressesBox";
 
 export default function ProfilePage() {
-    const { data: session, status } = useSession();
+    const { status } = useSession();
     const router = useRouter();
 
     useEffect(() => {
@@ -15,10 +17,11 @@ export default function ProfilePage() {
     }, [status, router]);
 
     return (
-        <div>
-            <h1>Mi Perfil</h1>
-            <p>Bienvenido, {session?.user?.name}</p>
-            <p>Email: {session?.user?.email}</p>
+        <div className="flex flex-row justify-center gap-20 mt-5">
+
+            <AddressesBox />
+            <PhonesBox />
+
         </div>
     );
 }

@@ -6,7 +6,7 @@ import { signIn, useSession, signOut } from 'next-auth/react';
 import Image from 'next/image';
 import axiosClient from '@/utils/axiosClient';
 import { usePathname } from 'next/navigation';
-import axios from 'axios';
+import Cookies from 'js-cookie';
 
 export default function NavBar() {
     const pathname = usePathname();
@@ -20,18 +20,15 @@ export default function NavBar() {
     const [dropdownOpen, setDropdownOpen] = useState(false);
 
     useEffect(() => {
-        // Solo crear el usuario si es nuevo (no existe en la base de datos)
         const createUserAndLogin = async () => {
             if (session?.user) {
                 const googleId = (session.user as any).googleId;
                 if (googleId) {
                     let user;
                     try {
-                        // Verificar si el usuario ya existe en el backend
                         const res = await axiosClient.get(`/users/google/${googleId}`);
                         user = res.data?.user;
                         if (!user) {
-                            // Si no existe, crear el usuario
                             const createRes = await axiosClient.post('/users', {
                                 googleId,
                                 email: session.user.email,
@@ -44,7 +41,6 @@ export default function NavBar() {
                             console.log("Usuario ya existe en backend");
                         }
                     } catch (err) {
-                        // Si el usuario no existe, el GET puede fallar, entonces lo creamos
                         const createRes = await axiosClient.post('/users', {
                             googleId,
                             email: session.user.email,
@@ -54,18 +50,18 @@ export default function NavBar() {
                         user = createRes.data?.user;
                         console.log("Usuario creado en backend (catch)");
                     }
-                    // Llamar al login del backend para obtener el JWT solo si no existe en localStorage
+                    // Guardar JWT en cookie en vez de localStorage
                     if (user && user.id && user.email) {
-                        const jwtLocal = localStorage.getItem('jwt_backend');
-                        if (!jwtLocal) {
+                        const jwtCookie = Cookies.get('jwt_backend');
+                        if (!jwtCookie) {
                             const jwtRes = await axiosClient.post('/auth/login', {
                                 id: user.id,
                                 email: user.email
                             });
-                            localStorage.setItem('jwt_backend', jwtRes.data.access_token);
-                            console.log('JWT del backend:', jwtRes.data.access_token);
+                            Cookies.set('jwt_backend', jwtRes.data.access_token, { expires: 30, secure: true, sameSite: 'lax' });
+                            console.log('JWT del backend (cookie):', jwtRes.data.access_token);
                         } else {
-                            console.log('JWT ya existe en localStorage:', jwtLocal);
+                            console.log('JWT ya existe en cookie:', jwtCookie);
                         }
                     } else {
                         console.warn('El usuario no tiene id o email, no se puede generar el JWT');
@@ -79,7 +75,7 @@ export default function NavBar() {
     const handleLogout = async () => {
         try {
             await axiosClient.post('/users/logout', {}, { withCredentials: true });
-            localStorage.removeItem('jwt_backend');
+            Cookies.remove('jwt_backend');
             signOut();
             console.log("Sesión cerrada correctamente");
         } catch (error) {
@@ -88,12 +84,19 @@ export default function NavBar() {
     };
 
     return (
-        <nav className="bg-white border-gray-200 dark:bg-gray-900">
-            <div className="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-4">
-                <Link href="/" className="flex items-center space-x-3 rtl:space-x-reverse">
-                    <Image src="/LOGO-04.png" width={100} height={100} alt="Logo" />
+        <nav className="bg-white border-gray-200 dark:bg-gray-900 w-full">
+            <div className="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-2 sm:p-4">
+                <Link href="/" className="flex items-center space-x-2 sm:space-x-3 rtl:space-x-reverse">
+                    <Image
+                        src="/LOGO-04.png"
+                        width={100}
+                        height={100}
+                        alt="Logo"
+                        className="w-12 h-12 sm:w-20 sm:h-20 md:w-24 md:h-24 object-contain"
+                        priority
+                    />
                 </Link>
-                <div className="flex items-center md:order-2 space-x-3 md:space-x-0 rtl:space-x-reverse">
+                <div className="flex items-center md:order-2 space-x-2 sm:space-x-3 md:space-x-0 rtl:space-x-reverse">
                     {session?.user ? (
                         <>
                             <button
@@ -154,12 +157,12 @@ export default function NavBar() {
                     </button>
                 </div>
                 <div className="items-center justify-between hidden w-full md:flex md:w-auto md:order-1" id="navbar-user">
-                    <ul className="flex flex-col font-medium p-4 md:p-0 mt-4 border border-gray-100 rounded-lg bg-gray-50 md:space-x-8 rtl:space-x-reverse md:flex-row md:mt-0 md:border-0 md:bg-white dark:bg-gray-800 md:dark:bg-gray-900 dark:border-gray-700">
+                    <ul className="flex flex-col font-medium p-2 sm:p-4 md:p-0 mt-2 sm:mt-4 border border-gray-100 rounded-lg bg-gray-50 md:space-x-8 rtl:space-x-reverse md:flex-row md:mt-0 md:border-0 md:bg-white dark:bg-gray-800 md:dark:bg-gray-900 dark:border-gray-700">
                         {navLinks.map(link => (
                             <li key={link.href}>
                                 <Link
                                     href={link.href}
-                                    className={`block py-2 px-3 rounded-sm md:p-0
+                                    className={`block py-2 px-3 rounded-sm md:p-0 text-sm sm:text-base
                     ${pathname === link.href
                                             ? 'text-blue-700 bg-blue-100 md:bg-transparent md:text-blue-700 md:dark:text-blue-500'
                                             : 'text-gray-900 hover:bg-gray-100 md:hover:bg-transparent md:hover:text-blue-700 dark:text-white md:dark:hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-white md:dark:hover:bg-transparent dark:border-gray-700'
